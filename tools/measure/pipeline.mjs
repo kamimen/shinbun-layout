@@ -1,6 +1,6 @@
 // Maker JSON -> problem -> browser measurements -> shinbun-layout -> placements written back -> render and check.
 //   node tools/measure/pipeline.mjs examples/maker-vertical.json out
-// Needs a release build of the solve example and a local shinbun-cli (SHINBUN_CLI, default ../../../shinbun-cli).
+// Needs `cargo build --release` (the shinbun-layout binary) and a local shinbun-cli (SHINBUN_CLI, default ../../../shinbun-cli).
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -10,7 +10,7 @@ import { launch, measureElements } from "./measure.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const [input = "examples/maker-vertical.json", outDir = "out"] = process.argv.slice(2);
 const cli = resolve(here, process.env.SHINBUN_CLI ?? "../../../shinbun-cli");
-const solve = resolve(here, "../../target/release/examples/solve");
+const solve = resolve(here, "../../target/release/shinbun-layout");
 mkdirSync(resolve(outDir), { recursive: true });
 const out = (name) => resolve(outDir, name);
 
@@ -84,6 +84,7 @@ laidOut.items.forEach((it, i) => {
   const p = placed.get(`i${i}`);
   if (p) Object.assign(it, { x: p.x, w: p.w, y: p.y, span: p.span });
 });
+laidOut.items = laidOut.items.filter((_, i) => placed.has(`i${i}`));
 writeFileSync(out("laid-out.json"), JSON.stringify(laidOut, null, 2));
 
 console.log(`unplaced: ${JSON.stringify(solution.unplaced)}`);

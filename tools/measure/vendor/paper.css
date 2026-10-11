@@ -12,3 +12,12 @@
   overflow: visible;
   max-width: none;
 }
+
+/* A column holds exactly --sb-chars characters and a frame exactly w lines, so a rounding error of a few
+   thousandths of a pixel makes some browsers wrap a line one character early, or drop the last line.
+   Give text frames a little room along both axes. */
+.sb-page--grid > .sb-article,
+.sb-page--grid > .sb-box {
+  margin-inline-end: -0.1em;
+  margin-block-end: -0.1em;
+}

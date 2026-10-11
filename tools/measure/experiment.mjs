@@ -61,7 +61,7 @@ try {
   await browser.close();
 }
 
-writeFileSync(new URL("./experiment-result.json", import.meta.url), JSON.stringify({ paper: PAPER, report, disagreements, nonMonotone }, null, 2));
+writeFileSync(new URL(`./experiment-${process.env.BROWSER ?? "chromium"}-${PAPER.writing}.json`, import.meta.url), JSON.stringify({ paper: PAPER, report, disagreements, nonMonotone }, null, 2));
 for (const r of report) console.log(`${r.article.padEnd(12)} span=${String(r.span).padStart(2)}  minW=${JSON.stringify(r.minW)}  compared=${r.comparedWidths}  disagree=${r.positionsDisagree}`);
 console.log(`\ntotal disagreements across positions: ${disagreements}`);
 console.log(`non-monotone cases (fits at w, but not at a larger w): ${nonMonotone}`);

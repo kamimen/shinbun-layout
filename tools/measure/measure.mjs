@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
-import { chromium } from "playwright-core";
+import { chromium, firefox, webkit } from "playwright-core";
 
 const vendor = (name) => readFileSync(new URL(`./vendor/${name}`, import.meta.url), "utf8");
 const CSS = `${vendor("shinbun.min.css")}\n${vendor("paper.css")}\nbody{margin:0}`;
 const FIND_OVERFLOW = vendor("overflow.js").replace("export function", "function");
 
-export const PAPER = { dan: 10, chars: 10, lines: 60, fs: 0.72 };
+export const PAPER = { dan: 10, chars: 10, lines: 60, fs: 0.72, writing: process.env.WRITING ?? "vertical" };
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -17,11 +17,14 @@ export function articleHtml(article, at, id) {
 
 export function pageHtml(articles, paper = PAPER) {
   const style = `--sb-chars:${paper.chars};--sb-lines:${paper.lines};--sb-fs:${paper.fs}rem;--sb-dan:${paper.dan}`;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>${CSS}</style></head><body><div class="sb-paper" data-sb-writing="vertical" style="${style}"><main class="sb-page sb-page--grid">${articles.join("")}</main></div></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>${CSS}</style></head><body><div class="sb-paper" data-sb-writing="${paper.writing ?? "vertical"}" style="${style}"><main class="sb-page sb-page--grid">${articles.join("")}</main></div></body></html>`;
 }
 
-/** Opens a browser. Uses the installed Chrome unless CHROME_PATH is set. */
+/** Opens a browser: BROWSER=chromium (default, the installed Chrome unless CHROME_PATH is set), firefox or webkit. */
 export async function launch() {
+  const name = process.env.BROWSER ?? "chromium";
+  if (name === "firefox") return firefox.launch();
+  if (name === "webkit") return webkit.launch();
   const executablePath = process.env.CHROME_PATH;
   return chromium.launch(executablePath ? { executablePath } : { channel: "chrome" });
 }
