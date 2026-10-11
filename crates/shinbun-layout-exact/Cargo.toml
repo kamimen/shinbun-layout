@@ -1,0 +1,13 @@
+[package]
+name = "shinbun-layout-exact"
+description = "Reference solver for shinbun-layout: the layout problem as a weighted set packing, solved with HiGHS. For benchmarks, not for shipping."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+shinbun-layout = { path = "../shinbun-layout" }
+good_lp = { version = "1", default-features = false, features = ["highs"] }

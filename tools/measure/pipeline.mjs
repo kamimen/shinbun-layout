@@ -61,7 +61,7 @@ try {
     }
     for (let w = 1; w <= paper.lines; w++) jobs.push({ q, index, w });
   }
-  const fits = await measureElements(browser, jobs.map((j, n) => itemHtml(j.index, j.w, j.q.span, n)), problem.paper);
+  const fits = await measureElements(browser, jobs.map((j, n) => itemHtml(j.index, j.w, j.q.span, n)), { ...problem.paper, fs: paper.fs });
   const minimal = new Map();
   jobs.forEach((j, n) => {
     const key = `${j.q.id}:${j.q.span}`;
@@ -90,3 +90,8 @@ console.log(`unplaced: ${JSON.stringify(solution.unplaced)}`);
 console.log(`warnings: ${JSON.stringify(solution.warnings)}`);
 console.log(`score: ${solution.score.total.toFixed(2)}  alternatives: ${solution.alternatives.length}`);
 console.log(`wrote ${out("laid-out.json")}`);
+
+const css = ["shinbun.min.css", "paper.css"].map((f) => readFileSync(resolve(here, "vendor", f), "utf8")).join("\n");
+const page = renderPaper(parseMakerJson(JSON.stringify(laidOut)));
+writeFileSync(out("laid-out.html"), `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>laid-out</title><style>${css}\nbody{margin:0}</style></head><body>${page}</body></html>`);
+console.log(`wrote ${out("laid-out.html")}`);

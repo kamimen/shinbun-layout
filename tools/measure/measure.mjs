@@ -45,13 +45,14 @@ const OVERFLOW_ANY = `(() => {
   for (const el of document.querySelectorAll(".sb-page--grid > [data-id]")) {
     const box = el.getBoundingClientRect();
     const vertical = getComputedStyle(el).writingMode.startsWith("vertical");
+    const isBox = el.classList.contains("sb-box");
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
     let over = false;
     while (!over && walker.nextNode()) {
       range.selectNodeContents(walker.currentNode);
       for (const r of range.getClientRects()) {
-        if (r.width > 0 && r.height > 0 && (vertical ? r.bottom > box.bottom + 1 : r.right > box.right + 1)) { over = true; break; }
+        if (r.width > 0 && r.height > 0 && (isBox ? (vertical ? r.left < box.left - 1 : r.bottom > box.bottom + 1) : vertical ? r.bottom > box.bottom + 1 : r.right > box.right + 1)) { over = true; break; }
       }
     }
     if (over) bad.push(Number(el.dataset.id));
