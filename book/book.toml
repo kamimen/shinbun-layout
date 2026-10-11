@@ -1,0 +1,12 @@
+[book]
+title = "shinbun-layout"
+description = "Automatic page layout for Japanese newspapers on the shinbun-css grid"
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../target/book"
+
+[output.html]
+git-repository-url = "https://github.com/kamimen/shinbun-layout"
+site-url = "/shinbun-layout/"
