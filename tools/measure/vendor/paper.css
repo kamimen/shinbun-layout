@@ -1,0 +1,14 @@
+/* Same as shinbun-maker's paper.css: the paper is as wide as its content */
+.sb-paper {
+  padding: 1rem 1.2rem 1.4rem;
+  width: max-content;
+}
+
+.sb-paper[data-sb-writing="horizontal"] {
+  width: 900px;
+}
+
+.sb-paper .sb-page {
+  overflow: visible;
+  max-width: none;
+}

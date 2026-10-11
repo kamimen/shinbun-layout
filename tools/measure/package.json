@@ -1,0 +1,9 @@
+{
+  "name": "shinbun-layout-measure",
+  "private": true,
+  "type": "module",
+  "description": "Reference measurement host for shinbun-layout: measures the smallest line count an article needs for each column span",
+  "dependencies": {
+    "playwright-core": "^1.64.0"
+  }
+}

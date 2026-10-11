@@ -1,0 +1,112 @@
+{
+  "paper": {
+    "writing": "vertical",
+    "dan": 10,
+    "lines": 50,
+    "chars": 10,
+    "fs": 0.72
+  },
+  "items": [
+    {
+      "title": "架空新聞",
+      "meta": "朝刊",
+      "x": 1,
+      "w": 8,
+      "y": 1,
+      "span": 3,
+      "id": "imv2xxs380",
+      "kind": "nameplate"
+    },
+    {
+      "text": "川のまちに「市民の書斎」",
+      "reverse": true,
+      "size": 2,
+      "x": 9,
+      "w": 26,
+      "y": 1,
+      "span": 2,
+      "id": "imv2xxs381",
+      "kind": "yoko"
+    },
+    {
+      "kicker": "みどり市",
+      "headline": "旧運河沿いに市民の書斎",
+      "headlineSize": "l",
+      "sleeve": "",
+      "dateline": "みどり市＝架空太郎",
+      "lead": "",
+      "body": "みどり市は七日、旧運河沿いの煉瓦倉庫を改修し、市民が自由に本を読み、書き物ができる「市民の書斎」を来年春に開くと発表した。\n\n倉庫は一九二〇年代に建てられ、かつては川舟で運ばれた穀物を保管していた。市は老朽化を理由に解体を検討していたが、住民団体が保存を求める署名を2万筆集め、方針を転換した。\n\n改修後は一階を閲覧室、二階を個人用の執筆席とする。蔵書は寄贈と購入を合わせて3万冊を目指し、開館時間は午前九時から午後十時までとした。",
+      "byline": "",
+      "isLead": true,
+      "x": 9,
+      "w": 17,
+      "y": 3,
+      "span": 5,
+      "id": "imv2xxs382",
+      "kind": "article"
+    },
+    {
+      "image": "",
+      "caption": "改修される煉瓦倉庫",
+      "x": 26,
+      "w": 9,
+      "y": 3,
+      "span": 3,
+      "id": "imv2xxs383",
+      "kind": "photo"
+    },
+    {
+      "kicker": "",
+      "headline": "図書館とどう違う",
+      "headlineSize": "s",
+      "sleeve": "",
+      "dateline": "",
+      "lead": "",
+      "body": "貸し出しはせず、館内での閲覧と執筆に特化する。",
+      "byline": "",
+      "isLead": false,
+      "x": 26,
+      "w": 9,
+      "y": 6,
+      "span": 2,
+      "id": "imv2xxs384",
+      "kind": "article"
+    },
+    {
+      "title": "今日のことば",
+      "body": "書斎　本を読み、書き物をするための静かな部屋。",
+      "x": 35,
+      "w": 8,
+      "y": 1,
+      "span": 3,
+      "id": "imv2xxs385",
+      "kind": "box"
+    },
+    {
+      "kicker": "",
+      "headline": "見守り隊、十周年",
+      "headlineSize": "s",
+      "sleeve": "",
+      "dateline": "",
+      "lead": "",
+      "body": "あおば区の見守り隊が十周年を迎えた。隊員は80人を超える。",
+      "byline": "",
+      "isLead": false,
+      "x": 35,
+      "w": 8,
+      "y": 4,
+      "span": 4,
+      "id": "imv2xxs386",
+      "kind": "article"
+    },
+    {
+      "label": "広告",
+      "x": 1,
+      "w": 42,
+      "y": 8,
+      "span": 3,
+      "id": "imv2xxs387",
+      "kind": "ad"
+    }
+  ]
+}
