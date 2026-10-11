@@ -164,6 +164,24 @@ fn the_beam_is_at_least_as_good_as_the_greedy_method() {
 }
 
 #[test]
+fn refining_is_never_worse_than_the_beam_and_is_deterministic() {
+    let p = front_page();
+    let t = table_for(&p);
+    let beam = Beam::default().solve(&p, &t).unwrap();
+    let opts = SolveOptions {
+        refine_iterations: 200,
+        ..SolveOptions::default()
+    };
+    let a = Refine::new(opts.clone()).solve(&p, &t).unwrap();
+    let b = Refine::new(opts).solve(&p, &t).unwrap();
+    assert!(a.score.total >= beam.score.total - 1e-9);
+    assert_eq!(a, b);
+    assert!(validate(&p, &t, &a.layout, &Rules::default())
+        .iter()
+        .all(|v| !v.is_hard()));
+}
+
+#[test]
 fn alternatives_are_distinct_layouts() {
     let p = front_page();
     let s = solve(&p, &table_for(&p), &SolveOptions::default()).unwrap();

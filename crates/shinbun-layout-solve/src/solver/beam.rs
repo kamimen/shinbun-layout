@@ -12,16 +12,16 @@ use std::collections::HashSet;
 type Key = Vec<(usize, u8, u8, u8, u8)>;
 
 #[derive(Clone)]
-struct State {
-    occ: Occupancy,
-    placed: Vec<(usize, Placement)>,
-    unplaced: Vec<(usize, Reason)>,
-    cheap: f64,
-    full: f64,
+pub(super) struct State {
+    pub(super) occ: Occupancy,
+    pub(super) placed: Vec<(usize, Placement)>,
+    pub(super) unplaced: Vec<(usize, Reason)>,
+    pub(super) cheap: f64,
+    pub(super) full: f64,
 }
 
 impl State {
-    fn key(&self) -> Key {
+    pub(super) fn key(&self) -> Key {
         let mut k: Vec<_> = self
             .placed
             .iter()
@@ -32,13 +32,13 @@ impl State {
     }
 }
 
-fn by_score_desc(a: &(f64, Key), b: &(f64, Key)) -> Ordering {
+pub(super) fn by_score_desc(a: &(f64, Key), b: &(f64, Key)) -> Ordering {
     b.0.total_cmp(&a.0).then_with(|| a.1.cmp(&b.1))
 }
 
 /// Places items in the order newspaper makeup does (SPEC 10.8, 押えて流す): fixed things first, then
 /// nameplate, ads, headlines, photos and boxes, and the stories last, most important first.
-fn order(problem: &Problem) -> Vec<usize> {
+pub(super) fn order(problem: &Problem) -> Vec<usize> {
     let mut idx: Vec<usize> = (0..problem.items.len())
         .filter(|i| problem.items[*i].fixed.is_none())
         .collect();
@@ -52,7 +52,7 @@ fn order(problem: &Problem) -> Vec<usize> {
     idx
 }
 
-fn layout_of(problem: &Problem, st: &State) -> Layout {
+pub(super) fn layout_of(problem: &Problem, st: &State) -> Layout {
     let mut placements: Vec<(usize, Placement)> = st.placed.clone();
     placements.sort_by_key(|(i, _)| *i);
     Layout {
@@ -66,7 +66,7 @@ fn layout_of(problem: &Problem, st: &State) -> Layout {
     }
 }
 
-fn full_score(problem: &Problem, scorer: &Scorer, opts: &SolveOptions, st: &State) -> f64 {
+pub(super) fn full_score(problem: &Problem, scorer: &Scorer, opts: &SolveOptions, st: &State) -> f64 {
     let layout = layout_of(problem, st);
     let views: Vec<View<'_>> = st
         .placed
@@ -86,9 +86,9 @@ fn full_score(problem: &Problem, scorer: &Scorer, opts: &SolveOptions, st: &Stat
 /// Smallest shapes kept per item for the look-ahead; enough to tell whether any room is left for it.
 const LOOKAHEAD_SHAPES: usize = 8;
 
-struct Prep {
-    scorer: Scorer,
-    order: Vec<usize>,
+pub(super) struct Prep {
+    pub(super) scorer: Scorer,
+    pub(super) order: Vec<usize>,
     /// For each item index: its smallest shapes by area (empty if it cannot fit anywhere)
     smallest: Vec<Vec<Shape>>,
 }
@@ -125,27 +125,18 @@ fn leaves_room(problem: &Problem, prep: &Prep, occ: &Occupancy, later: &[usize])
     need <= free
 }
 
-fn expand(
+/// Free placements for one item, best first by the cheap score.
+pub(super) fn candidates(
     problem: &Problem,
-    table: &MeasurementTable,
-    prep: &Prep,
+    scorer: &Scorer,
     opts: &SolveOptions,
     st: &State,
-    pos: usize,
-) -> Vec<State> {
-    let scorer = &prep.scorer;
-    let idx = prep.order[pos];
-    let later = &prep.order[pos + 1..];
-    let item = &problem.items[idx];
-    let all_shapes = shapes(item, &problem.paper, table, &opts.slack);
-    if all_shapes.is_empty() {
-        let mut next = st.clone();
-        next.unplaced.push((idx, Reason::NoShape));
-        return vec![next];
-    }
+    item: &Item,
+    all_shapes: &[Shape],
+) -> Vec<(f64, Placement)> {
     let placed: Vec<Placement> = st.placed.iter().map(|(_, a)| *a).collect();
     let mut cands: Vec<(f64, Placement)> = Vec::new();
-    for shape in &all_shapes {
+    for shape in all_shapes {
         for (x, y) in anchors(&problem.paper, &placed, shape) {
             let at = Placement {
                 x,
@@ -163,6 +154,27 @@ fn expand(
         b.0.total_cmp(&a.0)
             .then_with(|| (a.1.x, a.1.y, a.1.span, a.1.w).cmp(&(b.1.x, b.1.y, b.1.span, b.1.w)))
     });
+    cands
+}
+
+fn expand(
+    problem: &Problem,
+    table: &MeasurementTable,
+    prep: &Prep,
+    opts: &SolveOptions,
+    st: &State,
+    pos: usize,
+) -> Vec<State> {
+    let idx = prep.order[pos];
+    let later = &prep.order[pos + 1..];
+    let item = &problem.items[idx];
+    let all_shapes = shapes(item, &problem.paper, table, &opts.slack);
+    if all_shapes.is_empty() {
+        let mut next = st.clone();
+        next.unplaced.push((idx, Reason::NoShape));
+        return vec![next];
+    }
+    let cands = candidates(problem, &prep.scorer, opts, st, item, &all_shapes);
     let want = opts.branching.max(1);
     let mut chosen: Vec<(f64, Placement)> = Vec::with_capacity(want);
     for (delta, at) in cands.iter().take(want * 8) {
@@ -197,7 +209,7 @@ fn expand(
         .collect()
 }
 
-fn search(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> Vec<State> {
+pub(super) fn prepare(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> Prep {
     let order = order(problem);
     let mut smallest = vec![Vec::new(); problem.items.len()];
     for &i in &order {
@@ -206,14 +218,14 @@ fn search(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> V
         all.truncate(LOOKAHEAD_SHAPES);
         smallest[i] = all;
     }
-    let prep = Prep {
+    Prep {
         scorer: Scorer::new(problem, table, opts.weights),
         order,
         smallest,
-    };
-    let scorer = &prep.scorer;
-    let width = opts.beam_width.max(1);
+    }
+}
 
+pub(super) fn start_state(problem: &Problem) -> State {
     let mut start = State {
         occ: Occupancy::default(),
         placed: Vec::new(),
@@ -227,7 +239,14 @@ fn search(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> V
             start.placed.push((i, at));
         }
     }
-    let mut beam = vec![start];
+    start
+}
+
+pub(super) fn search(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> Vec<State> {
+    let prep = prepare(problem, table, opts);
+    let scorer = &prep.scorer;
+    let width = opts.beam_width.max(1);
+    let mut beam = vec![start_state(problem)];
 
     for pos in 0..prep.order.len() {
         let mut children: Vec<State> = beam
@@ -252,7 +271,12 @@ fn search(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> V
     beam
 }
 
-fn solution(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions, states: &[State]) -> Solution {
+pub(super) fn solution(
+    problem: &Problem,
+    table: &MeasurementTable,
+    opts: &SolveOptions,
+    states: &[State],
+) -> Solution {
     let scorer = Scorer::new(problem, table, opts.weights);
     let describe = |st: &State| {
         let layout = layout_of(problem, st);

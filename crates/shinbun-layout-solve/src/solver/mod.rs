@@ -1,4 +1,5 @@
 mod beam;
+mod refine;
 
 use crate::candidates::DEFAULT_SLACK;
 use crate::scoring::{ScoreBreakdown, Weights};
@@ -7,6 +8,7 @@ use shinbun_layout_core::model::{Layout, MeasurementTable, Problem, ProblemError
 use shinbun_layout_core::validate::{Rules, Violation};
 
 pub use beam::{Beam, Constructive};
+pub use refine::Refine;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -19,6 +21,10 @@ pub struct SolveOptions {
     pub alternatives: usize,
     /// Extra widths tried beyond the smallest one that fits
     pub slack: Vec<u8>,
+    /// Ruin-and-recreate steps after the beam search; used by `Refine` only
+    pub refine_iterations: usize,
+    /// Seed for `Refine`; the same seed gives the same layout
+    pub seed: u64,
     /// Text frames longer or wider than this ratio are never tried
     pub max_aspect: f64,
     pub weights: Weights,
@@ -32,6 +38,8 @@ impl Default for SolveOptions {
             branching: 8,
             alternatives: 3,
             slack: DEFAULT_SLACK.to_vec(),
+            refine_iterations: 400,
+            seed: 1,
             max_aspect: 6.0,
             weights: Weights::default(),
             rules: Rules::default(),

@@ -6,4 +6,4 @@ pub mod solver;
 
 pub use candidates::required_measurements;
 pub use scoring::{ScoreBreakdown, Weights};
-pub use solver::{Alternative, Beam, Constructive, Reason, Solution, SolveOptions, Solver, Unplaced};
+pub use solver::{Alternative, Beam, Constructive, Reason, Refine, Solution, SolveOptions, Solver, Unplaced};

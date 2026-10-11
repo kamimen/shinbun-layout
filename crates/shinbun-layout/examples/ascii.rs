@@ -77,15 +77,12 @@ fn main() {
         );
     }
     let width = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(16);
-    let solution = solve(
-        &problem,
-        &table,
-        &SolveOptions {
-            beam_width: width,
-            ..SolveOptions::default()
-        },
-    )
-    .unwrap();
+    let options = SolveOptions {
+        beam_width: width,
+        refine_iterations: std::env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(0),
+        ..SolveOptions::default()
+    };
+    let solution = Refine::new(options).solve(&problem, &table).unwrap();
     draw(&problem, &solution.layout);
     println!("unplaced: {:?}", solution.unplaced);
     println!("score: {:?}", solution.score);
