@@ -1,5 +1,4 @@
-use crate::model::{Item, Lookup, MeasureQuery, MeasurementTable, Paper, Placement, Problem};
-use crate::scoring::has_text;
+use shinbun_layout_core::model::{Item, Lookup, MeasureQuery, MeasurementTable, Paper, Placement, Problem};
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
 
@@ -44,7 +43,7 @@ pub fn shapes(item: &Item, paper: &Paper, table: &MeasurementTable, slack: &[u8]
         let Lookup::Needs(needs) = table.get(&item.id, span) else {
             continue;
         };
-        let widths: BTreeSet<u8> = if has_text(item.role) {
+        let widths: BTreeSet<u8> = if item.role.has_text() {
             slack
                 .iter()
                 .filter_map(|s| needs.checked_add(*s))
@@ -89,7 +88,7 @@ pub fn anchors(paper: &Paper, placed: &[Placement], shape: &Shape) -> Vec<(u8, u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Role, Writing};
+    use shinbun_layout_core::model::{Role, Writing};
 
     fn paper() -> Paper {
         Paper {

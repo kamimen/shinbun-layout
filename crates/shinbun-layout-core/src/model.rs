@@ -259,3 +259,10 @@ impl Layout {
         self.placements.iter().find(|p| p.id == id).map(|p| &p.at)
     }
 }
+
+impl Role {
+    /// Whether the item holds running text, so its size follows from the text rather than from taste.
+    pub fn has_text(self) -> bool {
+        matches!(self, Role::Article | Role::Box)
+    }
+}

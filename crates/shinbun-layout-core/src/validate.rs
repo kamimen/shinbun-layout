@@ -131,7 +131,7 @@ pub fn validate(
     out
 }
 
-pub(crate) struct View<'a> {
+pub struct View<'a> {
     pub id: &'a str,
     pub role: Role,
     pub headline: Option<Headline>,
@@ -154,7 +154,7 @@ fn is_story(role: Role) -> bool {
     role == Role::Article
 }
 
-pub(crate) fn forbidden_patterns(paper: &Paper, items: &[View<'_>], rules: &Rules) -> Vec<Violation> {
+pub fn forbidden_patterns(paper: &Paper, items: &[View<'_>], rules: &Rules) -> Vec<Violation> {
     let mut out = Vec::new();
     let flag = |pattern, ids: &[&str]| Violation::Forbidden {
         pattern,

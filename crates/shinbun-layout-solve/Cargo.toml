@@ -1,0 +1,15 @@
+[package]
+name = "shinbun-layout-solve"
+description = "Solvers for shinbun-layout: candidate generation, scoring, beam search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+shinbun-layout-core = { path = "../shinbun-layout-core", version = "0.1.0" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1"

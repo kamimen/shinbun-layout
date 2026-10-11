@@ -1,6 +1,6 @@
-use crate::geometry::area;
-use crate::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role};
 use serde::{Deserialize, Serialize};
+use shinbun_layout_core::geometry::area;
+use shinbun_layout_core::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -62,11 +62,6 @@ fn role_share(role: Role) -> f64 {
     }
 }
 
-/// Whether the item holds running text, so its size follows from the text rather than from taste.
-pub fn has_text(role: Role) -> bool {
-    matches!(role, Role::Article | Role::Box)
-}
-
 fn emphasis(item: &Item) -> f64 {
     if item.lead {
         1.0
@@ -111,7 +106,7 @@ impl Scorer {
                 })
                 .fold(f64::INFINITY, f64::min);
             let share = free * (it.priority as f64 * role_share(it.role)) / weight_sum;
-            let target = match (has_text(it.role), min_area.is_finite()) {
+            let target = match (it.role.has_text(), min_area.is_finite()) {
                 // Text should fill its frame: stay close to what it needs, and let the lead have a little more
                 (true, true) => share.clamp(min_area, min_area * (1.2 + 0.8 * emphasis(it))),
                 (_, true) => share.max(min_area),
@@ -244,7 +239,7 @@ impl Scorer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Headline, Writing};
+    use shinbun_layout_core::model::{Headline, Writing};
 
     fn problem(items: Vec<Item>) -> Problem {
         Problem {

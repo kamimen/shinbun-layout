@@ -1,9 +1,11 @@
 use super::{Alternative, Reason, Solution, SolveOptions, Solver, Unplaced};
 use crate::candidates::{anchors, shapes, Shape};
-use crate::geometry::{in_bounds, Occupancy};
-use crate::model::{Item, Layout, MeasurementTable, Paper, Placed, Placement, Problem, ProblemError};
-use crate::scoring::{has_text, Scorer};
-use crate::validate::{forbidden_patterns, validate, View};
+use crate::scoring::Scorer;
+use shinbun_layout_core::geometry::{in_bounds, Occupancy};
+use shinbun_layout_core::model::{
+    Item, Layout, MeasurementTable, Paper, Placed, Placement, Problem, ProblemError,
+};
+use shinbun_layout_core::validate::{forbidden_patterns, validate, View};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -151,7 +153,7 @@ fn expand(
                 y,
                 span: shape.span,
             };
-            let sliver = has_text(item.role) && scorer.aspect(&at) > opts.max_aspect;
+            let sliver = item.role.has_text() && scorer.aspect(&at) > opts.max_aspect;
             if !sliver && in_bounds(&problem.paper, &at) && st.occ.is_free(&at) {
                 cands.push((scorer.cheap(item, &at), at));
             }

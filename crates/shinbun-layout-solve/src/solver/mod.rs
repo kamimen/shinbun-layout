@@ -1,10 +1,10 @@
 mod beam;
 
 use crate::candidates::DEFAULT_SLACK;
-use crate::model::{Layout, MeasurementTable, Problem, ProblemError};
 use crate::scoring::{ScoreBreakdown, Weights};
-use crate::validate::{Rules, Violation};
 use serde::{Deserialize, Serialize};
+use shinbun_layout_core::model::{Layout, MeasurementTable, Problem, ProblemError};
+use shinbun_layout_core::validate::{Rules, Violation};
 
 pub use beam::{Beam, Constructive};
 

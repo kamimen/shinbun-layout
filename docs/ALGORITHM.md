@@ -34,3 +34,13 @@ Forbidden layouts (シリモチ, 並列, エントツ, ハラキリ) are warning
 
 Short articles on a sparse page leave empty space inside frames; the page cannot be filled without more content.
 No MILP / CP-SAT comparison yet. No WASM build yet.
+
+## Crates
+
+```
+shinbun-layout-core   model, geometry, validate            (serde)
+shinbun-layout-solve  candidates, scoring, solvers         (core)
+shinbun-layout        facade, JSON interface, examples     (core, solve, serde_json)
+```
+
+Dependencies point one way. Anything that produces layouts can be checked with `core` alone; solvers share candidates and scoring so they can be compared on the same inputs.

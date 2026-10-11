@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/shinbun-layout"]
+members = ["crates/shinbun-layout-core", "crates/shinbun-layout-solve", "crates/shinbun-layout"]
 
 [workspace.package]
 version = "0.1.0"

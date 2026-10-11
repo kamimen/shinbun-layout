@@ -361,6 +361,24 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "shinbun-layout-core",
+ "shinbun-layout-solve",
+]
+
+[[package]]
+name = "shinbun-layout-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "shinbun-layout-solve"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "shinbun-layout-core",
 ]
 
 [[package]]

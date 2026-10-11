@@ -10,6 +10,8 @@ keywords = ["layout", "newspaper", "japanese", "typesetting"]
 categories = ["algorithms"]
 
 [dependencies]
+shinbun-layout-core = { path = "../shinbun-layout-core", version = "0.1.0" }
+shinbun-layout-solve = { path = "../shinbun-layout-solve", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
