@@ -1,7 +1,6 @@
 use proptest::prelude::*;
 use shinbun_layout::*;
 
-/// A stand-in for the browser: how many lines `item` needs at `span` columns, from its text length.
 fn needs(item: &Item, paper: &Paper, span: u8) -> Option<u8> {
     let per_line = span as u32 * paper.chars as u32;
     let headline_lines = match (item.role, item.headline) {
@@ -12,8 +11,8 @@ fn needs(item: &Item, paper: &Paper, span: u8) -> Option<u8> {
         _ => 0,
     };
     let lines = match item.role {
-        Role::Photo | Role::Ad | Role::Nameplate | Role::Yoko => 1,
         Role::Article | Role::Box => item.chars.div_ceil(per_line) + headline_lines,
+        _ => 1,
     };
     (lines <= paper.lines as u32).then_some(lines as u8)
 }
@@ -28,17 +27,9 @@ fn table_for(problem: &Problem) -> MeasurementTable {
 }
 
 fn item(id: &str, role: Role, priority: u8, chars: u32, headline: Option<Headline>) -> Item {
-    Item {
-        id: id.into(),
-        role,
-        priority,
-        chars,
-        headline,
-        lead: false,
-        min_span: None,
-        max_span: None,
-        fixed: None,
-    }
+    let mut it = Item::new(id, role).priority(priority).chars(chars);
+    it.headline = headline;
+    it
 }
 
 fn at(x: u8, w: u8, y: u8, span: u8) -> Placement {
@@ -46,12 +37,7 @@ fn at(x: u8, w: u8, y: u8, span: u8) -> Placement {
 }
 
 fn paper() -> Paper {
-    Paper {
-        writing: Writing::Vertical,
-        dan: 10,
-        lines: 50,
-        chars: 10,
-    }
+    Paper::new(Writing::Vertical, 10, 50, 10)
 }
 
 fn front_page() -> Problem {
@@ -168,10 +154,7 @@ fn refining_is_never_worse_than_the_beam_and_is_deterministic() {
     let p = front_page();
     let t = table_for(&p);
     let beam = Beam::default().solve(&p, &t).unwrap();
-    let opts = SolveOptions {
-        refine_iterations: 200,
-        ..SolveOptions::default()
-    };
+    let opts = SolveOptions::default().refine_iterations(200);
     let a = Refine::new(opts.clone()).solve(&p, &t).unwrap();
     let b = Refine::new(opts).solve(&p, &t).unwrap();
     assert!(a.score.total >= beam.score.total - 1e-9);
@@ -206,13 +189,9 @@ fn an_item_that_cannot_fit_anywhere_is_reported_not_forced() {
         .push(item("monster", Role::Article, 4, 100_000, Some(Headline::M)));
     let t = table_for(&p);
     let s = solve(&p, &t, &SolveOptions::default()).unwrap();
-    assert_eq!(
-        s.unplaced,
-        vec![Unplaced {
-            id: "monster".into(),
-            reason: Reason::NoShape
-        }]
-    );
+    assert_eq!(s.unplaced.len(), 1);
+    assert_eq!(s.unplaced[0].id, "monster");
+    assert_eq!(s.unplaced[0].reason, Reason::NoShape);
     assert!(hard(&s.warnings).is_empty());
 }
 
@@ -228,12 +207,7 @@ fn when_the_page_is_full_the_least_important_item_is_dropped() {
         it.max_span = Some(5);
     }
     let p = Problem {
-        paper: Paper {
-            writing: Writing::Vertical,
-            dan: 10,
-            lines: 40,
-            chars: 10,
-        },
+        paper: Paper::new(Writing::Vertical, 10, 40, 10),
         items,
     };
     let s = solve(&p, &table_for(&p), &SolveOptions::default()).unwrap();
@@ -272,20 +246,36 @@ fn the_json_interface_matches_the_typed_one() {
 
     let problem_json = serde_json::to_string(&p).unwrap();
     let queries: Vec<MeasureQuery> =
-        serde_json::from_str(&required_measurements_json(&problem_json).unwrap()).unwrap();
+        serde_json::from_str(&json::required_measurements(&problem_json).unwrap()).unwrap();
     assert_eq!(queries, required_measurements(&p));
 
     let table_json = serde_json::to_string(&t).unwrap();
-    let out = solve_json(&problem_json, &table_json, "").unwrap();
+    let out = json::solve(&problem_json, &table_json, "").unwrap();
     let from_json: Solution = serde_json::from_str(&out).unwrap();
     assert_eq!(from_json, typed);
 
-    assert!(solve_json("{", &table_json, "")
+    assert!(matches!(
+        json::solve("{", &table_json, ""),
+        Err(json::Error::Problem(_))
+    ));
+    assert!(matches!(
+        json::solve(&problem_json, "nope", ""),
+        Err(json::Error::Measurements(_))
+    ));
+    assert!(matches!(
+        json::solve(&problem_json, &table_json, "{"),
+        Err(json::Error::Options(_))
+    ));
+    let broken = json::solve(
+        "{\"paper\":{\"dan\":0,\"lines\":10},\"items\":[]}",
+        &table_json,
+        "",
+    );
+    assert!(matches!(broken, Err(json::Error::Invalid(_))));
+    assert!(json::solve("{", &table_json, "")
         .unwrap_err()
+        .to_string()
         .starts_with("invalid problem"));
-    assert!(solve_json(&problem_json, "nope", "")
-        .unwrap_err()
-        .starts_with("invalid measurements"));
 }
 
 #[test]
@@ -328,12 +318,7 @@ fn arb_problem() -> impl Strategy<Value = Problem> {
     ((4u8..=12), (20u8..=60), prop::collection::vec(0..1usize, 1..9)).prop_flat_map(|(dan, lines, slots)| {
         let items: Vec<_> = (0..slots.len()).map(arb_item).collect();
         items.prop_map(move |items| Problem {
-            paper: Paper {
-                writing: Writing::Vertical,
-                dan,
-                lines,
-                chars: 10,
-            },
+            paper: Paper::new(Writing::Vertical, dan, lines, 10),
             items,
         })
     })
@@ -345,7 +330,7 @@ proptest! {
     #[test]
     fn a_solution_never_breaks_a_hard_constraint(p in arb_problem()) {
         let t = table_for(&p);
-        let opts = SolveOptions { beam_width: 4, branching: 4, ..SolveOptions::default() };
+        let opts = SolveOptions::default().beam_width(4).branching(4).refine_iterations(15).separate_moves(300);
         let s = solve(&p, &t, &opts).unwrap();
         prop_assert!(hard(&s.warnings).is_empty(), "{:?}", s.warnings);
         prop_assert!(hard(&validate(&p, &t, &s.layout, &Rules::default())).is_empty());
@@ -357,7 +342,7 @@ proptest! {
     #[test]
     fn every_item_is_placed_or_reported_exactly_once(p in arb_problem()) {
         let t = table_for(&p);
-        let opts = SolveOptions { beam_width: 4, branching: 4, ..SolveOptions::default() };
+        let opts = SolveOptions::default().beam_width(4).branching(4).refine_iterations(15).separate_moves(300);
         let s = solve(&p, &t, &opts).unwrap();
         let mut ids: Vec<&str> = s.layout.placements.iter().map(|x| x.id.as_str()).collect();
         ids.extend(s.unplaced.iter().map(|u| u.id.as_str()));
@@ -370,14 +355,14 @@ proptest! {
     #[test]
     fn the_same_input_gives_the_same_output(p in arb_problem()) {
         let t = table_for(&p);
-        let opts = SolveOptions { beam_width: 4, branching: 4, ..SolveOptions::default() };
+        let opts = SolveOptions::default().beam_width(4).branching(4).refine_iterations(15).separate_moves(300);
         prop_assert_eq!(solve(&p, &t, &opts).unwrap(), solve(&p, &t, &opts).unwrap());
     }
 
     #[test]
     fn an_item_is_dropped_only_when_nothing_fits(p in arb_problem()) {
         let t = table_for(&p);
-        let opts = SolveOptions { beam_width: 4, branching: 4, ..SolveOptions::default() };
+        let opts = SolveOptions::default().beam_width(4).branching(4).refine_iterations(15).separate_moves(300);
         let s = solve(&p, &t, &opts).unwrap();
         for u in &s.unplaced {
             if u.reason == Reason::NoShape {

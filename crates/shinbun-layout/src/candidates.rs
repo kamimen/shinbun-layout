@@ -1,4 +1,5 @@
-use shinbun_layout_core::model::{Item, Lookup, MeasureQuery, MeasurementTable, Paper, Placement, Problem};
+use crate::model::{Item, Lookup, MeasureQuery, MeasurementTable, Paper, Placement, Problem, Role, Writing};
+use crate::scoring::LINE_HEIGHT;
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
 
@@ -37,13 +38,41 @@ pub struct Shape {
     pub needs: u8,
 }
 
+/// How far the frame of a picture may differ from its ratio, as a fraction of the ideal length.
+const RATIO_TOLERANCE: f64 = 0.12;
+
+/// Widths that keep a picture's ratio at `span` columns. The caption takes one line of the frame.
+fn picture_widths(item: &Item, paper: &Paper, ratio: f64, span: u8, needs: u8) -> BTreeSet<u8> {
+    let caption = u8::from(item.caption);
+    let height_em = paper.length_em(span);
+    let ideal = match paper.writing {
+        Writing::Vertical => ratio * height_em / LINE_HEIGHT,
+        Writing::Horizontal => height_em / (ratio * LINE_HEIGHT),
+    };
+    let max = paper.lines.saturating_sub(caption);
+    let near: BTreeSet<u8> = [ideal.floor(), ideal.ceil()]
+        .into_iter()
+        .filter(|l| *l >= 1.0 && *l <= max as f64)
+        .map(|l| l as u8)
+        .filter(|l| ((*l as f64 - ideal) / ideal).abs() <= RATIO_TOLERANCE)
+        .map(|l| l + caption)
+        .filter(|w| *w >= needs)
+        .collect();
+    if !near.is_empty() || ideal < 1.0 || ideal > max as f64 {
+        return near;
+    }
+    BTreeSet::from([(ideal.round() as u8).max(1) + caption])
+}
+
 pub fn shapes(item: &Item, paper: &Paper, table: &MeasurementTable, slack: &[u8]) -> Vec<Shape> {
     let mut out = Vec::new();
     for span in span_range(paper, item) {
         let Lookup::Needs(needs) = table.get(&item.id, span) else {
             continue;
         };
-        let widths: BTreeSet<u8> = if item.role.has_text() {
+        let widths: BTreeSet<u8> = if let (Role::Photo, Some(ratio)) = (item.role, item.ratio) {
+            picture_widths(item, paper, ratio, span, needs)
+        } else if item.role.has_text() {
             slack
                 .iter()
                 .filter_map(|s| needs.checked_add(*s))
@@ -88,7 +117,6 @@ pub fn anchors(paper: &Paper, placed: &[Placement], shape: &Shape) -> Vec<(u8, u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shinbun_layout_core::model::{Role, Writing};
 
     fn paper() -> Paper {
         Paper {
@@ -96,6 +124,8 @@ mod tests {
             dan: 10,
             lines: 50,
             chars: 10,
+            column_em: None,
+            gap_em: None,
         }
     }
 
@@ -107,6 +137,8 @@ mod tests {
             chars: 500,
             headline: None,
             lead: false,
+            ratio: None,
+            caption: false,
             min_span: None,
             max_span: None,
             fixed: None,
@@ -196,5 +228,70 @@ mod tests {
         assert!(a
             .iter()
             .all(|(x, y)| *x >= 1 && *x as u16 + 9 <= 50 && *y >= 1 && *y < 10));
+    }
+
+    fn picture(ratio: f64, caption: bool, writing: Writing) -> (Item, Paper) {
+        let mut it = item("p");
+        it.role = Role::Photo;
+        it.ratio = Some(ratio);
+        it.caption = caption;
+        (it, Paper { writing, ..paper() })
+    }
+
+    fn lookup_all() -> MeasurementTable {
+        let mut t = MeasurementTable::default();
+        for span in 1..=10 {
+            t.insert("p", span, Some(1));
+        }
+        t
+    }
+
+    #[test]
+    fn a_wide_picture_gets_wide_frames_in_vertical_writing() {
+        let (it, p) = picture(1.73, false, Writing::Vertical);
+        for s in shapes(&it, &p, &lookup_all(), &DEFAULT_SLACK) {
+            let width_em = s.w as f64 * LINE_HEIGHT;
+            let height_em = p.length_em(s.span);
+            let r = width_em / height_em;
+            assert!(
+                (r / 1.73 - 1.0).abs() < 0.2,
+                "span {} w {} gives ratio {r}",
+                s.span,
+                s.w
+            );
+        }
+    }
+
+    #[test]
+    fn horizontal_writing_swaps_the_axes() {
+        let (it, p) = picture(1.73, false, Writing::Horizontal);
+        let shapes = shapes(&it, &p, &lookup_all(), &DEFAULT_SLACK);
+        assert!(!shapes.is_empty());
+        for s in shapes {
+            let r = p.length_em(s.span) / (s.w as f64 * LINE_HEIGHT);
+            assert!(
+                (r / 1.73 - 1.0).abs() < 0.2,
+                "span {} w {} gives ratio {r}",
+                s.span,
+                s.w
+            );
+        }
+    }
+
+    #[test]
+    fn the_caption_adds_one_line() {
+        let (a, p) = picture(1.0, false, Writing::Vertical);
+        let (b, _) = picture(1.0, true, Writing::Vertical);
+        let t = lookup_all();
+        let with: Vec<_> = shapes(&b, &p, &t, &DEFAULT_SLACK);
+        let without: Vec<_> = shapes(&a, &p, &t, &DEFAULT_SLACK);
+        assert!(!with.is_empty());
+        for s in &with {
+            assert!(
+                without.iter().any(|o| o.span == s.span && o.w + 1 == s.w),
+                "span {}",
+                s.span
+            );
+        }
     }
 }

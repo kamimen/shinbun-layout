@@ -1,17 +1,26 @@
+use crate::geometry::area;
+use crate::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role};
 use serde::{Deserialize, Serialize};
-use shinbun_layout_core::geometry::area;
-use shinbun_layout_core::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role};
 use std::collections::HashMap;
 
+/// How much each part of the score counts.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct Weights {
+    /// How close each frame is to the size its importance deserves.
     pub size: f64,
+    /// How far each frame is from a sliver.
     pub shape: f64,
+    /// How well each item sits where makeup would put it (dead corners, the diagonal).
     pub position: f64,
+    /// How much of the paper is filled.
     pub coverage: f64,
+    /// Whether more important stories get more room.
     pub hierarchy: f64,
+    /// The cost of each style warning.
     pub forbidden: f64,
+    /// The cost of leaving an item out, scaled by its importance.
     pub unplaced: f64,
 }
 
@@ -24,20 +33,30 @@ impl Default for Weights {
             coverage: 6.0,
             hierarchy: 1.5,
             forbidden: 1.5,
-            unplaced: 12.0,
+            unplaced: 40.0,
         }
     }
 }
 
+/// The score of a layout, part by part. Higher is better; costs are negative.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ScoreBreakdown {
+    /// See [`Weights::size`].
     pub size: f64,
+    /// See [`Weights::shape`].
     pub shape: f64,
+    /// See [`Weights::position`].
     pub position: f64,
+    /// See [`Weights::coverage`].
     pub coverage: f64,
+    /// See [`Weights::hierarchy`].
     pub hierarchy: f64,
+    /// See [`Weights::forbidden`].
     pub forbidden: f64,
+    /// See [`Weights::unplaced`].
     pub unplaced: f64,
+    /// The sum of the parts.
     pub total: f64,
 }
 
@@ -48,8 +67,13 @@ pub struct ItemScore {
     pub position: f64,
 }
 
+/// Dropping an important story must cost more than dropping several minor ones, hence the square.
+pub fn unplaced_cost(item: &Item) -> f64 {
+    (item.priority as f64 / 10.0).powi(2)
+}
+
 /// Line pitch over character size in shinbun-css (`--sb-lh`)
-const LINE_HEIGHT: f64 = 1.55;
+pub const LINE_HEIGHT: f64 = 1.55;
 
 fn role_share(role: Role) -> f64 {
     match role {
@@ -70,7 +94,6 @@ fn emphasis(item: &Item) -> f64 {
     }
 }
 
-/// Everything the scores need that does not change while searching.
 pub struct Scorer {
     paper: Paper,
     pub weights: Weights,
@@ -123,6 +146,12 @@ impl Scorer {
         }
     }
 
+    /// Cells that count towards filling the page: area beyond a little over the target earns nothing,
+    /// so a photo cannot crowd out the stories just to cover more paper.
+    pub fn covered(&self, item: &Item, at: &Placement) -> f64 {
+        (area(at) as f64).min(self.target_area(&item.id) * 1.25)
+    }
+
     pub fn target_area(&self, id: &str) -> f64 {
         self.targets.get(id).copied().unwrap_or(1.0)
     }
@@ -147,7 +176,7 @@ impl Scorer {
     /// Long side over short side, measured in character sizes (a line is `--sb-lh` characters wide).
     pub fn aspect(&self, at: &Placement) -> f64 {
         let along_lines = at.w as f64 * LINE_HEIGHT;
-        let along_columns = at.span as f64 * self.paper.chars as f64;
+        let along_columns = self.paper.length_em(at.span);
         along_lines.max(along_columns) / along_lines.min(along_columns)
     }
 
@@ -187,7 +216,7 @@ impl Scorer {
         w.size * s.size * pw
             + w.shape * s.shape
             + w.position * s.position * pw
-            + w.coverage * area(at) as f64 / self.total_cells
+            + w.coverage * self.covered(item, at) / self.total_cells
     }
 
     pub fn total(
@@ -197,23 +226,36 @@ impl Scorer {
         unplaced: &[&Item],
         forbidden: usize,
     ) -> ScoreBreakdown {
+        let placed = layout
+            .placements
+            .iter()
+            .filter_map(|p| problem.item(&p.id).map(|item| (item, p.at)));
+        self.total_of(placed, unplaced, forbidden)
+    }
+
+    pub fn total_of<'a>(
+        &self,
+        placed: impl IntoIterator<Item = (&'a Item, Placement)>,
+        unplaced: &[&Item],
+        forbidden: usize,
+    ) -> ScoreBreakdown {
         let w = &self.weights;
         let mut b = ScoreBreakdown::default();
         let mut cells = 0.0;
         let mut stories: Vec<(u8, f64)> = Vec::new();
-        for p in &layout.placements {
-            let Some(item) = problem.item(&p.id) else { continue };
-            cells += area(&p.at) as f64;
+        for (item, at) in placed {
             if item.fixed.is_some() {
+                cells += area(&at) as f64;
                 continue;
             }
-            let s = self.item_score(item, &p.at);
+            cells += self.covered(item, &at);
+            let s = self.item_score(item, &at);
             let pw = 0.5 + 0.5 * item.priority as f64 / 10.0;
             b.size += w.size * s.size * pw;
             b.shape += w.shape * s.shape;
             b.position += w.position * s.position * pw;
             if item.role == Role::Article {
-                stories.push((item.priority, area(&p.at) as f64));
+                stories.push((item.priority, area(&at) as f64));
             }
         }
         b.coverage = w.coverage * (cells / self.total_cells) * self.movable.max(1.0);
@@ -230,7 +272,7 @@ impl Scorer {
             }
         }
         b.forbidden = -w.forbidden * forbidden as f64;
-        b.unplaced = -w.unplaced * unplaced.iter().map(|i| i.priority as f64 / 10.0).sum::<f64>();
+        b.unplaced = -w.unplaced * unplaced.iter().map(|i| unplaced_cost(i)).sum::<f64>();
         b.total = b.size + b.shape + b.position + b.coverage + b.hierarchy + b.forbidden + b.unplaced;
         b
     }
@@ -239,7 +281,7 @@ impl Scorer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shinbun_layout_core::model::{Headline, Writing};
+    use crate::model::{Headline, Writing};
 
     fn problem(items: Vec<Item>) -> Problem {
         Problem {
@@ -248,6 +290,8 @@ mod tests {
                 dan: 10,
                 lines: 50,
                 chars: 10,
+                column_em: None,
+                gap_em: None,
             },
             items,
         }
@@ -261,6 +305,8 @@ mod tests {
             chars: 500,
             headline: Some(Headline::M),
             lead: false,
+            ratio: None,
+            caption: false,
             min_span: None,
             max_span: None,
             fixed: None,

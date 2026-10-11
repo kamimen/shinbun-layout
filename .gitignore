@@ -4,4 +4,5 @@ node_modules/
 .DS_Store
 *.log
 .claude/
-tools/measure/experiment-result.json
+tools/measure/experiment-*.json
+/pkg/

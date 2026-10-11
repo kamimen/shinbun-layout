@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Layouts that newspaper makeup avoids (SPEC §10.9 of shinbun-css). They are warnings, not errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Pattern {
     /// シリモチ: a headline or photo that spans two or more columns in the bottom column
     Shirimochi,
@@ -16,12 +17,18 @@ pub enum Pattern {
     Harakiri,
 }
 
+/// Which style patterns are looked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct Rules {
+    /// シリモチ
     pub shirimochi: bool,
+    /// 並列
     pub heiretsu: bool,
+    /// エントツ
     pub entotsu: bool,
+    /// ハラキリ
     pub harakiri: bool,
 }
 
@@ -36,17 +43,63 @@ impl Default for Rules {
     }
 }
 
+/// A problem found in a layout. Everything but `Forbidden` makes the layout unusable.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Violation {
-    UnknownItem { id: String },
-    OutOfBounds { id: String },
-    Overlap { a: String, b: String },
-    FixedMoved { id: String },
-    DoesNotFit { id: String, needs: u8, has: u8 },
-    CannotFitAtSpan { id: String, span: u8 },
-    Unmeasured { id: String, span: u8 },
-    Forbidden { pattern: Pattern, ids: Vec<String> },
+    /// The layout places an id that is not in the problem.
+    UnknownItem {
+        /// The id.
+        id: String,
+    },
+    /// The item is partly outside the paper.
+    OutOfBounds {
+        /// The item.
+        id: String,
+    },
+    /// Two items cover the same cells.
+    Overlap {
+        /// One item.
+        a: String,
+        /// The other.
+        b: String,
+    },
+    /// A fixed item is not where it was fixed.
+    FixedMoved {
+        /// The item.
+        id: String,
+    },
+    /// The text needs more lines than the frame has.
+    DoesNotFit {
+        /// The item.
+        id: String,
+        /// Lines the text needs.
+        needs: u8,
+        /// Lines the frame has.
+        has: u8,
+    },
+    /// The measurements say the item cannot fit at this many columns.
+    CannotFitAtSpan {
+        /// The item.
+        id: String,
+        /// The columns it spans.
+        span: u8,
+    },
+    /// There is no measurement for the item at this many columns.
+    Unmeasured {
+        /// The item.
+        id: String,
+        /// The columns it spans.
+        span: u8,
+    },
+    /// A pattern newspaper makeup avoids; a warning only.
+    Forbidden {
+        /// Which pattern.
+        pattern: Pattern,
+        /// The items involved.
+        ids: Vec<String>,
+    },
 }
 
 impl Violation {
@@ -79,7 +132,7 @@ fn resolve<'a>(problem: &'a Problem, layout: &'a Layout, out: &mut Vec<Violation
     placed
 }
 
-/// Checks a layout against the hard constraints and the style rules. Independent of any solver.
+/// Checks any layout against the hard constraints and the style rules.
 pub fn validate(
     problem: &Problem,
     table: &MeasurementTable,
@@ -201,9 +254,14 @@ pub fn forbidden_patterns(paper: &Paper, items: &[View<'_>], rules: &Rules) -> V
             let above = items.iter().any(|it| it.at.y + it.at.span - 1 <= k);
             let below = items.iter().any(|it| it.at.y > k);
             if !crossed && above && below {
+                let ids = items
+                    .iter()
+                    .filter(|it| it.at.y + it.at.span - 1 == k || it.at.y == k + 1)
+                    .map(|it| it.id.to_string())
+                    .collect();
                 out.push(Violation::Forbidden {
                     pattern: Pattern::Harakiri,
-                    ids: Vec::new(),
+                    ids,
                 });
             }
         }
@@ -222,6 +280,8 @@ mod tests {
             dan: 10,
             lines: 50,
             chars: 10,
+            column_em: None,
+            gap_em: None,
         }
     }
 
@@ -233,6 +293,8 @@ mod tests {
             chars: 100,
             headline: Some(Headline::M),
             lead: false,
+            ratio: None,
+            caption: false,
             min_span: None,
             max_span: None,
             fixed: None,
@@ -394,6 +456,9 @@ mod tests {
     fn harakiri_is_a_cut_across_the_whole_paper_except_near_the_bottom() {
         let v = two(at(1, 50, 1, 3), at(1, 50, 4, 3));
         assert!(patterns(&v).contains(&Pattern::Harakiri));
+        assert!(v.iter().any(
+            |x| matches!(x, Violation::Forbidden { pattern: Pattern::Harakiri, ids } if ids.len() == 2)
+        ));
         let v = two(at(1, 50, 1, 8), at(1, 50, 9, 2));
         assert!(
             !patterns(&v).contains(&Pattern::Harakiri),

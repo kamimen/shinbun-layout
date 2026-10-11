@@ -5,9 +5,7 @@
 //! forbidden-pattern terms involve pairs of items and are left out, so compare with `separable`.
 
 use good_lp::{constraint, default_solver, variable, variables, Expression, Solution, SolverModel, Variable};
-use shinbun_layout::candidates::shapes;
-use shinbun_layout::geometry::{area, in_bounds, Occupancy};
-use shinbun_layout::scoring::Scorer;
+use shinbun_layout::__internal::{in_bounds, shapes, unplaced_cost, Occupancy, Scorer};
 use shinbun_layout::{Layout, MeasurementTable, Placed, Placement, Problem, SolveOptions};
 
 pub struct Exact {
@@ -43,8 +41,8 @@ fn gain(
     w.size * s.size * pw
         + w.shape * s.shape
         + w.position * s.position * pw
-        + w.coverage * (area(at) as f64 / total_cells) * movable.max(1.0)
-        + w.unplaced * item.priority as f64 / 10.0
+        + w.coverage * (scorer.covered(item, at) / total_cells) * movable.max(1.0)
+        + w.unplaced * unplaced_cost(item)
 }
 
 pub fn solve(problem: &Problem, table: &MeasurementTable, opts: &SolveOptions) -> Result<Exact, String> {

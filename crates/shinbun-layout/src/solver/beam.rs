@@ -1,11 +1,9 @@
 use super::{Alternative, Reason, Solution, SolveOptions, Solver, Unplaced};
 use crate::candidates::{anchors, shapes, Shape};
+use crate::geometry::{in_bounds, Occupancy};
+use crate::model::{Item, Layout, MeasurementTable, Paper, Placed, Placement, Problem, ProblemError};
 use crate::scoring::Scorer;
-use shinbun_layout_core::geometry::{in_bounds, Occupancy};
-use shinbun_layout_core::model::{
-    Item, Layout, MeasurementTable, Paper, Placed, Placement, Problem, ProblemError,
-};
-use shinbun_layout_core::validate::{forbidden_patterns, validate, View};
+use crate::validate::{forbidden_patterns, validate, View};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -67,7 +65,6 @@ pub(super) fn layout_of(problem: &Problem, st: &State) -> Layout {
 }
 
 pub(super) fn full_score(problem: &Problem, scorer: &Scorer, opts: &SolveOptions, st: &State) -> f64 {
-    let layout = layout_of(problem, st);
     let views: Vec<View<'_>> = st
         .placed
         .iter()
@@ -80,7 +77,8 @@ pub(super) fn full_score(problem: &Problem, scorer: &Scorer, opts: &SolveOptions
         .collect();
     let forbidden = forbidden_patterns(&problem.paper, &views, &opts.rules).len();
     let unplaced: Vec<&Item> = st.unplaced.iter().map(|(i, _)| &problem.items[*i]).collect();
-    scorer.total(problem, &layout, &unplaced, forbidden).total
+    let placed = st.placed.iter().map(|(i, at)| (&problem.items[*i], *at));
+    scorer.total_of(placed, &unplaced, forbidden).total
 }
 
 /// Smallest shapes kept per item for the look-ahead; enough to tell whether any room is left for it.
@@ -122,7 +120,8 @@ fn leaves_room(problem: &Problem, prep: &Prep, occ: &Occupancy, later: &[usize])
             return false;
         }
     }
-    need <= free
+    // Rectangles never tile perfectly, so ask for some slack
+    need * 6 <= free * 5
 }
 
 /// Free placements for one item, best first by the cheap score.
@@ -322,10 +321,12 @@ pub(super) fn solution(
 /// Beam search over the placements of one item after another. Deterministic: ties are broken by position.
 #[derive(Debug, Clone, Default)]
 pub struct Beam {
+    /// Beam width, branching and the rest.
     pub options: SolveOptions,
 }
 
 impl Beam {
+    /// A beam search with these options.
     pub fn new(options: SolveOptions) -> Self {
         Self { options }
     }
@@ -357,6 +358,7 @@ impl Solver for Beam {
 /// The greedy method: the best placement for each item in turn, never looking back.
 #[derive(Debug, Clone, Default)]
 pub struct Constructive {
+    /// Only the weights, rules and shapes matter; the width and branching are set to 1.
     pub options: SolveOptions,
 }
 

@@ -1,15 +1,16 @@
 use super::beam::{candidates, full_score, prepare, search, solution, start_state, Prep, State};
+use super::separate::separate;
 use super::{Reason, Solution, SolveOptions, Solver};
 use crate::candidates::shapes;
-use shinbun_layout_core::geometry::Occupancy;
-use shinbun_layout_core::model::{MeasurementTable, Placement, Problem, ProblemError};
+use crate::geometry::Occupancy;
+use crate::model::{MeasurementTable, Placement, Problem, ProblemError};
 use std::collections::HashSet;
 
 /// Small deterministic generator (splitmix64); the solver must give the same answer for the same seed.
-struct Rng(u64);
+pub(super) struct Rng(pub(super) u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    pub(super) fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -17,11 +18,11 @@ impl Rng {
         z ^ (z >> 31)
     }
 
-    fn below(&mut self, n: usize) -> usize {
+    pub(super) fn below(&mut self, n: usize) -> usize {
         (self.next() % n.max(1) as u64) as usize
     }
 
-    fn unit(&mut self) -> f64 {
+    pub(super) fn unit(&mut self) -> f64 {
         (self.next() >> 11) as f64 / (1u64 << 53) as f64
     }
 }
@@ -66,7 +67,94 @@ fn ruin(problem: &Problem, st: &State, rng: &mut Rng, count: usize) -> State {
     next
 }
 
-/// Puts the removed and unplaced items back one by one, each at the placement that scores best overall.
+/// Attempts to fit left-out items by overlap minimisation, each from a fresh random start of the search.
+const SEPARATE_TRIES: usize = 3;
+
+/// How hard the search for a best way of putting items back works: it grows with the product of the
+/// number of items and their candidate placements, so small pages get a deeper search and large ones a cheaper one.
+#[derive(Clone, Copy)]
+struct Depth {
+    items: usize,
+    /// Up to this many items left, the wider branching applies
+    wide_until: usize,
+    branch_small: usize,
+    branch_large: usize,
+}
+
+impl Depth {
+    fn for_problem(problem: &Problem) -> Self {
+        let movable = problem.items.iter().filter(|i| i.fixed.is_none()).count();
+        if movable <= 8 {
+            Depth {
+                items: 4,
+                wide_until: 3,
+                branch_small: 10,
+                branch_large: 6,
+            }
+        } else {
+            Depth {
+                items: 3,
+                wide_until: 2,
+                branch_small: 8,
+                branch_large: 4,
+            }
+        }
+    }
+
+    fn branch(&self, items: usize) -> usize {
+        if items <= self.wide_until {
+            self.branch_small
+        } else {
+            self.branch_large
+        }
+    }
+}
+
+/// Puts the items back in the best way among their top placements, or leaves some out if that scores higher.
+fn best_completion(
+    problem: &Problem,
+    table: &MeasurementTable,
+    prep: &Prep,
+    opts: &SolveOptions,
+    st: State,
+    pending: &[usize],
+    depth: Depth,
+) -> State {
+    let Some((&idx, rest)) = pending.split_first() else {
+        let mut done = st;
+        done.full = full_score(problem, &prep.scorer, opts, &done);
+        return done;
+    };
+    let item = &problem.items[idx];
+    let all = shapes(item, &problem.paper, table, &opts.slack);
+    let mut best: Option<State> = None;
+    let mut consider = |cand: State| {
+        if best.as_ref().map_or(true, |b| cand.full > b.full) {
+            best = Some(cand);
+        }
+    };
+    if !all.is_empty() {
+        for (_, at) in candidates(problem, &prep.scorer, opts, &st, item, &all)
+            .iter()
+            .take(depth.branch(rest.len() + 1))
+        {
+            let mut next = st.clone();
+            next.occ.occupy(at);
+            next.placed.push((idx, *at));
+            consider(best_completion(problem, table, prep, opts, next, rest, depth));
+        }
+    }
+    let mut skipped = st;
+    let reason = if all.is_empty() {
+        Reason::NoShape
+    } else {
+        Reason::NoSpace
+    };
+    skipped.unplaced.push((idx, reason));
+    consider(best_completion(problem, table, prep, opts, skipped, rest, depth));
+    best.expect("at least the skipped branch exists")
+}
+
 fn recreate(
     problem: &Problem,
     table: &MeasurementTable,
@@ -77,7 +165,21 @@ fn recreate(
 ) -> State {
     let mut pending: Vec<usize> = st.unplaced.iter().map(|(i, _)| *i).collect();
     pending.sort_by_key(|i| prep.order.iter().position(|o| o == i));
+    if rng.below(2) == 0 {
+        // Sometimes the stories go first, so a photo placed early cannot take the room they need
+        pending.sort_by_key(|i| {
+            let it = &problem.items[*i];
+            (
+                std::cmp::Reverse(it.priority),
+                prep.order.iter().position(|o| o == i),
+            )
+        });
+    }
     st.unplaced.clear();
+    let depth = Depth::for_problem(problem);
+    if pending.len() <= depth.items {
+        return best_completion(problem, table, prep, opts, st, &pending, depth);
+    }
     for idx in pending {
         let item = &problem.items[idx];
         let all = shapes(item, &problem.paper, table, &opts.slack);
@@ -116,10 +218,12 @@ fn recreate(
 /// The best layout seen is returned, so the result is never worse than the beam's.
 #[derive(Debug, Clone, Default)]
 pub struct Refine {
+    /// Beam width, iterations, seed and the rest.
     pub options: SolveOptions,
 }
 
 impl Refine {
+    /// A refining search with these options.
     pub fn new(options: SolveOptions) -> Self {
         Self { options }
     }
@@ -142,7 +246,11 @@ impl Solver for Refine {
         let mut best = first;
         for step in 0..iterations {
             let t = t0 * (t1 / t0).powf(step as f64 / iterations.max(1) as f64);
-            let count = 1 + rng.below(3);
+            let room = Depth::for_problem(problem)
+                .items
+                .saturating_sub(current.unplaced.len())
+                .clamp(1, 3);
+            let count = 1 + rng.below(room);
             let ruined = ruin(problem, &current, &mut rng, count);
             let mut next = recreate(problem, table, &prep, opts, ruined, &mut rng);
             next.full = full_score(problem, &prep.scorer, opts, &next);
@@ -152,6 +260,25 @@ impl Solver for Refine {
             }
             if accept {
                 current = next;
+            }
+        }
+
+        if opts.separate_moves > 0 && best.unplaced.iter().any(|(_, r)| *r == Reason::NoSpace) {
+            for _ in 0..SEPARATE_TRIES {
+                if let Some(found) = separate(
+                    problem,
+                    table,
+                    &prep.scorer,
+                    opts,
+                    &best,
+                    &mut rng,
+                    opts.separate_moves,
+                ) {
+                    if found.full > best.full {
+                        best = found;
+                    }
+                    break;
+                }
             }
         }
 

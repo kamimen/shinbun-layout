@@ -34,22 +34,11 @@ fn needs(item: &Item, paper: &Paper, span: u8) -> Option<u8> {
 
 fn instance(seed: u64, n: u64) -> Problem {
     let mut r = Lcg(seed);
-    let paper = Paper {
-        writing: Writing::Vertical,
-        dan: 8,
-        lines: 36,
-        chars: 10,
-    };
-    let mk = |id: String, role, priority, chars, headline| Item {
-        id,
-        role,
-        priority,
-        chars,
-        headline,
-        lead: false,
-        min_span: None,
-        max_span: None,
-        fixed: None,
+    let paper = Paper::new(Writing::Vertical, 6, 24, 10);
+    let mk = |id: String, role, priority, chars, headline| {
+        let mut it = Item::new(id, role).priority(priority).chars(chars);
+        it.headline = headline;
+        it
     };
     let mut nameplate = mk("N".into(), Role::Nameplate, 10, 0, None);
     nameplate.fixed = Some(Placement {
@@ -102,20 +91,25 @@ fn main() {
         let b = Beam::new(opts.clone()).solve(&p, &t).unwrap();
         let tb = t0.elapsed();
         let t0 = Instant::now();
-        let rf = Refine::new(SolveOptions {
-            refine_iterations: 1500,
-            ..opts.clone()
-        })
-        .solve(&p, &t)
-        .unwrap();
+        let rf = Refine::new(opts.clone().refine_iterations(1500))
+            .solve(&p, &t)
+            .unwrap();
         let tr = t0.elapsed();
         let (bs, rs) = (
             separable(&p, &t, &opts, &b.layout),
             separable(&p, &t, &opts, &rf.layout),
         );
+        let missing = |l: &Layout| {
+            p.items
+                .iter()
+                .filter(|i| !l.placements.iter().any(|q| q.id == i.id))
+                .count()
+        };
         let gap = |x: f64| 100.0 * (e.objective - x) / e.objective.abs().max(1e-9);
         println!(
-            "{seed:>4}  {:>6.2} {:>6.2} ({:>5.2}) {:>6.2} ({:>5.2}) | {:>6.2} {:>6.2} {:>6.2} | {:?} {:?} {:?}",
+            "{seed:>4} u{}/{}  {:>6.2} {:>6.2} ({:>5.2}) {:>6.2} ({:>5.2}) | {:>6.2} {:>6.2} {:>6.2} | {:?} {:?} {:?}",
+            missing(&e.layout),
+            missing(&rf.layout),
             e.objective,
             bs,
             gap(bs),

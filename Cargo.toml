@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/shinbun-layout-core", "crates/shinbun-layout-solve", "crates/shinbun-layout", "crates/shinbun-layout-exact"]
+members = ["crates/shinbun-layout", "crates/shinbun-layout-wasm", "crates/shinbun-layout-exact"]
+default-members = ["crates/shinbun-layout"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,3 +13,6 @@ rust-version = "1.80"
 [profile.release]
 lto = true
 codegen-units = 1
+
+[profile.test]
+opt-level = 2

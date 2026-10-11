@@ -2,17 +2,9 @@
 use shinbun_layout::*;
 
 fn item(id: &str, role: Role, priority: u8, chars: u32, headline: Option<Headline>) -> Item {
-    Item {
-        id: id.into(),
-        role,
-        priority,
-        chars,
-        headline,
-        lead: false,
-        min_span: None,
-        max_span: None,
-        fixed: None,
-    }
+    let mut it = Item::new(id, role).priority(priority).chars(chars);
+    it.headline = headline;
+    it
 }
 
 /// A stand-in for the browser: lines needed from the text length.
@@ -26,8 +18,8 @@ fn needs(item: &Item, paper: &Paper, span: u8) -> Option<u8> {
         _ => 0,
     };
     let lines = match item.role {
-        Role::Photo | Role::Ad | Role::Nameplate | Role::Yoko => 1,
         Role::Article | Role::Box => item.chars.div_ceil(per_line) + head,
+        _ => 1,
     };
     (lines <= paper.lines as u32).then_some(lines as u8)
 }
@@ -50,12 +42,7 @@ fn main() {
     let mut lead = item("1", Role::Article, 10, 700, Some(Headline::L));
     lead.lead = true;
     let problem = Problem {
-        paper: Paper {
-            writing: Writing::Vertical,
-            dan: 10,
-            lines: 50,
-            chars: 10,
-        },
+        paper: Paper::new(Writing::Vertical, 10, 50, 10),
         items: vec![
             nameplate,
             ad,
@@ -77,11 +64,9 @@ fn main() {
         );
     }
     let width = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(16);
-    let options = SolveOptions {
-        beam_width: width,
-        refine_iterations: std::env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(0),
-        ..SolveOptions::default()
-    };
+    let options = SolveOptions::default()
+        .beam_width(width)
+        .refine_iterations(std::env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(0));
     let solution = Refine::new(options).solve(&problem, &table).unwrap();
     draw(&problem, &solution.layout);
     println!("unplaced: {:?}", solution.unplaced);

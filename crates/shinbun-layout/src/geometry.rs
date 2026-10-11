@@ -111,6 +111,8 @@ mod tests {
             dan: 10,
             lines: 50,
             chars: 10,
+            column_em: None,
+            gap_em: None,
         };
         assert!(in_bounds(&paper, &at(1, 50, 1, 10)));
         assert!(!in_bounds(&paper, &at(2, 50, 1, 10)));
