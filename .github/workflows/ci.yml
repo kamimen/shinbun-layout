@@ -13,5 +13,18 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --workspace --exclude shinbun-layout-exact --all-targets -- -D warnings
       - run: cargo test
+      - run: cargo doc --no-deps --workspace --exclude shinbun-layout-exact
+        env:
+          RUSTDOCFLAGS: -D warnings
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install wasm-bindgen-cli --version "$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' Cargo.lock)" --locked
+      - run: scripts/build-wasm.sh
