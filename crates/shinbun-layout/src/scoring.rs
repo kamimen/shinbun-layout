@@ -1,5 +1,5 @@
 use crate::geometry::area;
-use crate::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role};
+use crate::model::{Item, Layout, Lookup, MeasurementTable, Paper, Placement, Problem, Role, Writing};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -163,13 +163,63 @@ impl Scorer {
         let aspect = self.aspect(at);
         let shape = match item.role {
             Role::Article | Role::Photo | Role::Box => 1.0 - ((aspect - 1.0) / 5.0).clamp(0.0, 1.0),
-            _ => 1.0,
+            Role::Yoko => ((self.wide(at) - 1.0) / 3.0).clamp(0.0, 1.0),
+            Role::Ad => self.band(at),
+            Role::Nameplate => match self.paper.writing {
+                Writing::Vertical => {
+                    let tall = 1.0 / self.wide(at);
+                    if tall < 1.5 {
+                        (tall / 1.5).clamp(0.0, 1.0)
+                    } else {
+                        (3.5 / tall).min(1.0)
+                    }
+                }
+                Writing::Horizontal => {
+                    if at.span == self.paper.dan {
+                        1.0
+                    } else {
+                        0.3
+                    }
+                }
+            },
         };
 
         ItemScore {
             size,
             shape,
             position: self.position(item, at),
+        }
+    }
+
+    pub fn wide(&self, at: &Placement) -> f64 {
+        let along_lines = at.w as f64 * LINE_HEIGHT;
+        let along_columns = self.paper.length_em(at.span);
+        match self.paper.writing {
+            Writing::Vertical => along_lines / along_columns,
+            Writing::Horizontal => along_columns / along_lines,
+        }
+    }
+
+    fn band(&self, at: &Placement) -> f64 {
+        let (across, full) = match self.paper.writing {
+            Writing::Vertical => (at.w, self.paper.lines),
+            Writing::Horizontal => (at.span, self.paper.dan),
+        };
+        if across == full {
+            1.0
+        } else if across == full / 2 || across == full.div_ceil(2) {
+            0.8
+        } else if self.wide(at) > 1.0 {
+            0.4
+        } else {
+            0.0
+        }
+    }
+
+    fn at_bottom(&self, at: &Placement) -> bool {
+        match self.paper.writing {
+            Writing::Vertical => at.y + at.span - 1 == self.paper.dan,
+            Writing::Horizontal => at.x + at.w - 1 == self.paper.lines,
         }
     }
 
@@ -190,12 +240,25 @@ impl Scorer {
     fn position(&self, item: &Item, at: &Placement) -> f64 {
         let (u, v) = self.corner_offsets(at);
         match item.role {
-            Role::Nameplate | Role::Yoko => 1.0 - (0.7 * v + 0.3 * u),
+            Role::Nameplate | Role::Yoko => {
+                let near_start = match self.paper.writing {
+                    Writing::Vertical => 1.0 - (0.7 * v + 0.3 * u),
+                    Writing::Horizontal => 1.0 - (0.7 * u + 0.3 * v),
+                };
+                if item.role == Role::Nameplate {
+                    near_start
+                } else {
+                    0.5 + 0.5 * near_start
+                }
+            }
             Role::Ad => {
-                if at.y + at.span - 1 == self.paper.dan {
+                if self.at_bottom(at) {
                     1.0
                 } else {
-                    0.5 * v
+                    0.5 * match self.paper.writing {
+                        Writing::Vertical => v,
+                        Writing::Horizontal => u,
+                    }
                 }
             }
             // SPEC 10.8: boxes and photos go in the dead corners, away from the main diagonal

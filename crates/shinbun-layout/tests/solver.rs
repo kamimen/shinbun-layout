@@ -290,6 +290,79 @@ fn placements_serialize_like_shinbun_maker() {
     );
 }
 
+fn page_with_furniture(writing: Writing) -> Problem {
+    let paper = match writing {
+        Writing::Vertical => Paper::new(writing, 10, 50, 10),
+        Writing::Horizontal => Paper::new(writing, 6, 40, 10),
+    };
+    let mut lead = item("lead", Role::Article, 10, 300, Some(Headline::L));
+    lead.lead = true;
+    Problem {
+        paper,
+        items: vec![
+            item("nameplate", Role::Nameplate, 10, 0, None),
+            item("yoko", Role::Yoko, 4, 0, None),
+            lead,
+            item("second", Role::Article, 6, 200, Some(Headline::M)),
+            item("third", Role::Article, 3, 120, Some(Headline::S)),
+            item("ad", Role::Ad, 3, 0, None),
+        ],
+    }
+}
+
+fn looks_wide(paper: &Paper, at: &Placement) -> bool {
+    let along_lines = at.w as f64 * 1.55;
+    let along_columns = paper.length_em(at.span);
+    match paper.writing {
+        Writing::Vertical => along_lines > along_columns,
+        Writing::Horizontal => along_columns > along_lines,
+    }
+}
+
+#[test]
+fn the_ad_sits_at_the_bottom_and_headlines_and_ads_lie_flat() {
+    for writing in [Writing::Vertical, Writing::Horizontal] {
+        let p = page_with_furniture(writing);
+        let s = solve(&p, &table_for(&p), &SolveOptions::default()).unwrap();
+        assert!(s.unplaced.is_empty(), "{writing:?}: {:?}", s.unplaced);
+        let ad = *s.layout.get("ad").unwrap();
+        let bottom = match writing {
+            Writing::Vertical => ad.y + ad.span - 1 == p.paper.dan,
+            Writing::Horizontal => ad.x + ad.w - 1 == p.paper.lines,
+        };
+        assert!(bottom, "{writing:?}: the ad is not at the bottom: {ad:?}");
+        assert!(
+            looks_wide(&p.paper, &ad),
+            "{writing:?}: the ad stands upright: {ad:?}"
+        );
+        let yoko = *s.layout.get("yoko").unwrap();
+        assert!(
+            looks_wide(&p.paper, &yoko),
+            "{writing:?}: the headline stands upright: {yoko:?}"
+        );
+    }
+}
+
+#[test]
+fn the_nameplate_is_upright_in_vertical_writing_and_a_band_in_horizontal_writing() {
+    let p = page_with_furniture(Writing::Vertical);
+    let n = *solve(&p, &table_for(&p), &SolveOptions::default())
+        .unwrap()
+        .layout
+        .get("nameplate")
+        .unwrap();
+    assert!(!looks_wide(&p.paper, &n), "{n:?}");
+    assert!(n.span < p.paper.dan, "{n:?}");
+    let p = page_with_furniture(Writing::Horizontal);
+    let n = *solve(&p, &table_for(&p), &SolveOptions::default())
+        .unwrap()
+        .layout
+        .get("nameplate")
+        .unwrap();
+    assert_eq!(n.span, p.paper.dan, "{n:?}");
+    assert_eq!(n.x, 1, "the nameplate is not at the top: {n:?}");
+}
+
 fn arb_item(index: usize) -> impl Strategy<Value = Item> {
     (
         prop_oneof![

@@ -37,6 +37,8 @@ Two details of the measuring host matter. Articles overflow at the end of the bl
 
 Size, shape, position, coverage, hierarchy, forbidden patterns, unplaced — weights in `Weights`.
 Position follows shinbun-css SPEC §10.8–10.9: dead corners (死角) for boxes and photos, diagonal for articles, headlines last.
+Things without text have shapes of their own (SPEC §10.6 and the glossary): an ad lies flat at the bottom of the page, across the whole width (全) or half of it (半); a horizontal headline (横見出し) lies flat; a nameplate stands upright at the top right in vertical writing and is a band across the top in horizontal writing.
+"Top" and "bottom" follow the writing: the columns in vertical writing, the lines in horizontal writing.
 Forbidden layouts (シリモチ, 並列, エントツ, ハラキリ) are warnings; overlap, out-of-bounds, fixed items moved and overflow are hard violations.
 
 ## Solvers
